@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Mirror Bot</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <h1>Polymarket Mirror</h1>
+                <p class="subtitle">Tracking <span id="target-wallet-display">...</span></p>
+            </div>
+            <div class="header-actions">
+                <div class="status-badge" id="bot-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Disconnected</span>
+                </div>
+                <button class="btn-primary" id="connect-wallet-btn">Connect Wallet</button>
+            </div>
+        </header>
+
+        <!-- Configuration Panel -->
+        <section class="config-panel">
+            <h2>Configuration</h2>
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>Target Wallet</label>
+                    <input type="text" id="target-wallet" placeholder="0x...">
+                </div>
+                <div class="config-item">
+                    <label>Private Key</label>
+                    <input type="password" id="private-key" placeholder="0x...">
+                </div>
+                <div class="config-item">
+                    <label>Percentage Allocation (%)</label>
+                    <input type="number" id="percentage-allocation" placeholder="5" step="0.1" min="0.1" max="100">
+                </div>
+                <div class="config-item">
+                    <label>Max Trade Size ($)</label>
+                    <input type="number" id="max-trade-size" placeholder="100">
+                </div>
+                <div class="config-item">
+                    <label>Daily Spending Limit ($)</label>
+                    <input type="number" id="daily-spending-limit" placeholder="500">
+                </div>
+                <div class="config-item">
+                    <label>Min Liquidity Ratio (%)</label>
+                    <input type="number" id="min-liquidity-ratio" placeholder="10" step="1" min="0" max="100">
+                </div>
+            </div>
+
+            <div class="config-toggles">
+                <div class="toggle-item">
+                    <label>
+                        <input type="checkbox" id="dry-run-toggle" checked>
+                        <span class="toggle-label">Dry Run Mode (Safe Testing)</span>
+                    </label>
+                </div>
+                <div class="toggle-item">
+                    <label>
+                        <input type="checkbox" id="notifications-toggle">
+                        <span class="toggle-label">Browser Notifications</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="config-actions">
+                <button class="btn-secondary" id="save-config-btn">Save Configuration</button>
+                <button class="btn-primary" id="start-bot-btn">Start Bot</button>
+                <button class="btn-danger" id="stop-bot-btn" style="display: none;">Stop Bot</button>
+            </div>
+        </section>
+
+        <!-- Stats Overview -->
+        <section class="stats-overview">
+            <div class="stat-card">
+                <div class="stat-label">Total Trades</div>
+                <div class="stat-value" id="total-trades">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Today's Spending</div>
+                <div class="stat-value" id="today-spending">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Spent (30d)</div>
+                <div class="stat-value" id="total-spent">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">USDC Balance</div>
+                <div class="stat-value" id="usdc-balance">$0.00</div>
+            </div>
+        </section>
+
+        <!-- Target Wallet Positions -->
+        <section class="positions-section">
+            <div class="section-header">
+                <h2>Target Wallet Positions</h2>
+                <button class="btn-secondary" id="refresh-target-positions-btn">Refresh</button>
+            </div>
+            <div class="positions-list" id="target-positions-list">
+                <div class="empty-state">
+                    <p>Configure target wallet and click Refresh</p>
+                    <small>Shows all open positions from the wallet you're copying</small>
+                </div>
+            </div>
+        </section>
+
+        <!-- Active Positions -->
+        <section class="positions-section">
+            <div class="section-header">
+                <h2>Your Copied Positions</h2>
+                <button class="btn-secondary" id="refresh-positions-btn">Refresh</button>
+            </div>
+            <div class="positions-list" id="positions-list">
+                <div class="empty-state">
+                    <p>No active positions yet</p>
+                    <small>Positions will appear here when the bot detects and copies trades</small>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trade History -->
+        <section class="trades-section">
+            <div class="section-header">
+                <h2>Trade History</h2>
+                <button class="btn-secondary" id="refresh-trades-btn">Refresh</button>
+            </div>
+            <div class="trades-list" id="trades-list">
+                <div class="empty-state">
+                    <p>No trades executed yet</p>
+                    <small>Trade history will appear here</small>
+                </div>
+            </div>
+        </section>
+
+        <!-- Activity Log -->
+        <section class="activity-section">
+            <div class="section-header">
+                <h2>Activity Log</h2>
+                <button class="btn-secondary" id="clear-log-btn">Clear</button>
+            </div>
+            <div class="activity-log" id="activity-log">
+                <div class="log-entry">
+                    <span class="log-time">--:--:--</span>
+                    <span class="log-message">Waiting for bot to start...</span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Wallet Connection Modal -->
+    <div class="modal" id="wallet-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Connect Wallet</h3>
+                <button class="modal-close" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Enter your wallet private key to enable trading:</p>
+                <input type="password" id="modal-private-key" placeholder="0x...">
+                <small>⚠️ Your private key is stored locally in your browser and never sent to any server</small>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancel-connect">Cancel</button>
+                <button class="btn-primary" id="confirm-connect">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
