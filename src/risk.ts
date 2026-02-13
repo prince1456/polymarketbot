@@ -36,9 +36,12 @@ export class RiskManager {
         return await operation();
       } catch (error: any) {
         lastError = error;
+        const errorStr = JSON.stringify(error?.info ?? '');
         const isRateLimit = error?.info?.error?.message?.includes('rate limit')
           || error?.info?.error?.code === -32090
-          || error?.code === 'CALL_EXCEPTION';
+          || errorStr.includes('rate limit')
+          || error?.code === 'CALL_EXCEPTION'
+          || error?.code === 'BAD_DATA';
 
         if (!isRateLimit || attempt === RiskManager.MAX_RETRIES) {
           throw error;
