@@ -157,18 +157,50 @@ export class RiskManager {
     return this.getUserBalance();
   }
 
+  /**
+   * Fetch USDC balance for any wallet address on Polygon.
+   */
+  public async getUsdcBalanceOf(address: string): Promise<number> {
+    try {
+      const provider = this.wallet.provider;
+      if (!provider) {
+        throw new Error('Wallet provider not available');
+      }
+
+      const usdcContract = new ethers.Contract(
+        this.USDC_ADDRESS,
+        this.USDC_ABI,
+        provider
+      );
+
+      const balance = await usdcContract.balanceOf(address);
+
+      if (this.cachedDecimals === null) {
+        this.cachedDecimals = Number(await usdcContract.decimals());
+      }
+
+      return parseFloat(ethers.formatUnits(balance, this.cachedDecimals));
+    } catch (error) {
+      console.error(`Error fetching USDC balance for ${address}:`, error);
+      return 0;
+    }
+  }
+
   public async printRiskStatus(): Promise<void> {
     try {
       const balance = await this.getUserBalance();
       const todaySpending = this.db.getTodaySpending();
       const tradeCount = this.db.getTradeCount();
 
-      const ratio = balance.available / this.config.targetBalance;
-
       console.log('\n=== Risk Status ===');
       console.log(`USDC Balance: $${balance.available.toFixed(2)}`);
-      console.log(`Target Balance: $${this.config.targetBalance.toLocaleString()}`);
-      console.log(`Copy Ratio: 1:${(this.config.targetBalance / balance.available).toFixed(0)} (${(ratio * 100).toFixed(4)}%)`);
+      if (this.config.targetBalance > 0) {
+        const ratio = balance.available / this.config.targetBalance;
+        console.log(`Target Balance: $${this.config.targetBalance.toLocaleString()} (manual)`);
+        console.log(`Copy Ratio: 1:${(this.config.targetBalance / balance.available).toFixed(0)} (${(ratio * 100).toFixed(4)}%)`);
+      } else {
+        console.log(`Target Balance: Auto-fetch (live from chain + positions)`);
+      }
       console.log(`Today's Spending: $${todaySpending.toFixed(2)} / $${this.config.dailySpendingLimit}`);
       console.log(`Remaining Today: $${(this.config.dailySpendingLimit - todaySpending).toFixed(2)}`);
       console.log(`Total Trades: ${tradeCount}`);

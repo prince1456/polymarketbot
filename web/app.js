@@ -18,7 +18,7 @@ function loadConfiguration() {
     const config = {
         targetWallet: localStorage.getItem('targetWallet') || '',
         privateKey: localStorage.getItem('privateKey') || '',
-        targetBalance: localStorage.getItem('targetBalance') || '200000',
+        targetBalance: localStorage.getItem('targetBalance') || '0',
         maxTradeSize: localStorage.getItem('maxTradeSize') || '100',
         dailySpendingLimit: localStorage.getItem('dailySpendingLimit') || '500',
         minLiquidityRatio: localStorage.getItem('minLiquidityRatio') || '10',
@@ -182,7 +182,7 @@ async function startBot() {
         const config = {
             targetWallet: localStorage.getItem('targetWallet'),
             privateKey: localStorage.getItem('privateKey'),
-            targetBalance: parseFloat(localStorage.getItem('targetBalance')) || 200000,
+            targetBalance: parseFloat(localStorage.getItem('targetBalance')) || 0,
             maxTradeSize: parseFloat(localStorage.getItem('maxTradeSize')),
             dailySpendingLimit: parseFloat(localStorage.getItem('dailySpendingLimit')),
             minLiquidityRatio: parseFloat(localStorage.getItem('minLiquidityRatio')) / 100,

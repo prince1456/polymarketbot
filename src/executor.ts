@@ -11,6 +11,11 @@ export class TradeExecutor {
   private risk: RiskManager;
   private wallet: ethers.Wallet;
 
+  // Cached target portfolio value (refreshed periodically)
+  private cachedTargetBalance: number = 0;
+  private targetBalanceFetchedAt: number = 0;
+  private readonly TARGET_BALANCE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   constructor(
     config: AppConfig,
     db: DatabaseManager,
@@ -115,12 +120,22 @@ export class TradeExecutor {
    *
    * Example: target has 200k, trades $2000 (1% of portfolio)
    *          we have $200, so we trade $2 (1% of our portfolio)
+   *
+   * If TARGET_BALANCE=0 (default), auto-fetches the target's total
+   * portfolio value (on-chain USDC + Polymarket position values).
    */
   private async calculateProportionalSize(targetPosition: Position): Promise<number> {
     try {
       const ourBalance = await this.risk.getBalance();
       const targetTradeValue = targetPosition.value;
-      const targetTotalBalance = this.config.targetBalance;
+
+      // Get target's total balance (manual override or auto-fetch)
+      const targetTotalBalance = await this.getTargetBalance();
+
+      if (targetTotalBalance <= 0) {
+        console.log('  WARNING: Could not determine target balance, skipping trade');
+        return 0;
+      }
 
       // Calculate what ratio of the target's portfolio this trade represents
       const ratio = targetTradeValue / targetTotalBalance;
@@ -128,7 +143,9 @@ export class TradeExecutor {
       // Apply the same ratio to our balance
       let ourTradeSize = ourBalance.available * ratio;
 
+      const source = this.config.targetBalance > 0 ? 'manual' : 'auto-fetched';
       console.log(`  Ratio calculation:`);
+      console.log(`    Target balance: $${targetTotalBalance.toLocaleString()} (${source})`);
       console.log(`    Target trade: $${targetTradeValue.toFixed(2)} / $${targetTotalBalance.toLocaleString()} = ${(ratio * 100).toFixed(4)}%`);
       console.log(`    Our balance: $${ourBalance.available.toFixed(2)}`);
       console.log(`    Our trade: $${ourTradeSize.toFixed(2)}`);
@@ -143,6 +160,79 @@ export class TradeExecutor {
     } catch (error) {
       console.error('Error calculating proportional size:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Returns the target's total balance. Uses manual config value if set,
+   * otherwise auto-fetches from chain (USDC) + Polymarket positions.
+   * Result is cached for 5 minutes to avoid spamming APIs.
+   */
+  private async getTargetBalance(): Promise<number> {
+    // If manually configured, use that
+    if (this.config.targetBalance > 0) {
+      return this.config.targetBalance;
+    }
+
+    // Check cache
+    const now = Date.now();
+    if (this.cachedTargetBalance > 0 && (now - this.targetBalanceFetchedAt) < this.TARGET_BALANCE_CACHE_TTL) {
+      return this.cachedTargetBalance;
+    }
+
+    // Auto-fetch: on-chain USDC + sum of position values
+    console.log('  Fetching target portfolio value...');
+
+    const [usdcBalance, positionsValue] = await Promise.all([
+      this.risk.getUsdcBalanceOf(this.config.targetWallet),
+      this.fetchTargetPositionsValue(),
+    ]);
+
+    const total = usdcBalance + positionsValue;
+
+    console.log(`    Target USDC on-chain: $${usdcBalance.toLocaleString()}`);
+    console.log(`    Target positions value: $${positionsValue.toLocaleString()}`);
+    console.log(`    Target total portfolio: $${total.toLocaleString()}`);
+
+    // Cache result
+    this.cachedTargetBalance = total;
+    this.targetBalanceFetchedAt = now;
+
+    return total;
+  }
+
+  /**
+   * Fetches all of the target's Polymarket positions and sums their values.
+   */
+  private async fetchTargetPositionsValue(): Promise<number> {
+    try {
+      const dataApiUrl = 'https://data-api.polymarket.com';
+      const response = await fetch(`${dataApiUrl}/positions?user=${this.config.targetWallet}`);
+
+      if (!response.ok) {
+        console.log('    Failed to fetch target positions from Data API');
+        return 0;
+      }
+
+      const data = await response.json();
+
+      if (!data || !Array.isArray(data)) {
+        return 0;
+      }
+
+      let totalValue = 0;
+      for (const pos of data) {
+        const size = parseFloat(pos.size || pos.shares || '0');
+        if (size > 0) {
+          const value = parseFloat(pos.currentValue || pos.value || '0');
+          totalValue += value;
+        }
+      }
+
+      return totalValue;
+    } catch (error) {
+      console.error('Error fetching target positions value:', error);
+      return 0;
     }
   }
 

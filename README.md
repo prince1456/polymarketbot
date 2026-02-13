@@ -49,7 +49,7 @@ nano .env
 
 ### Trading Parameters
 
-- `TARGET_BALANCE`: Target trader's estimated total balance in USD (used for ratio calculation)
+- `TARGET_BALANCE`: Target trader's total balance in USD. Set to `0` (default) to **auto-fetch** from chain + positions
 - `MAX_TRADE_SIZE`: Maximum USD per single trade (safety limit)
 - `DAILY_SPENDING_LIMIT`: Maximum USD to spend per day
 - `MIN_LIQUIDITY_RATIO`: Minimum market liquidity required (0.1 = 10%)
@@ -59,9 +59,12 @@ nano .env
 The bot calculates trade sizes by matching the target's portfolio ratio:
 
 ```
-ratio = target_trade_value / TARGET_BALANCE
+ratio = target_trade_value / target_total_balance
 your_trade = your_balance * ratio
 ```
+
+By default (`TARGET_BALANCE=0`), the bot **automatically fetches** the target's total portfolio value
+(on-chain USDC balance + sum of all Polymarket position values). You can set a manual override if needed.
 
 Example: Target has $200,000 and trades $2,000 (1% of portfolio).
 You have $200 USDC, so the bot trades $2 (same 1% ratio).
@@ -73,7 +76,7 @@ PRIVATE_KEY=0xYourPrivateKeyHere
 TARGET_WALLET=0xTargetWalletAddressHere
 POLYMARKET_API_KEY=your_api_key_here
 
-TARGET_BALANCE=200000
+TARGET_BALANCE=0
 MAX_TRADE_SIZE=100
 DAILY_SPENDING_LIMIT=500
 MIN_LIQUIDITY_RATIO=0.1

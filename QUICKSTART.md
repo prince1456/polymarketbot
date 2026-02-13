@@ -23,8 +23,8 @@ TARGET_WALLET=0x...
 # Polymarket API key
 POLYMARKET_API_KEY=your_key_here
 
-# Target's estimated balance (for ratio-based sizing)
-TARGET_BALANCE=200000
+# Target balance (0 = auto-fetch from chain + positions)
+TARGET_BALANCE=0
 MAX_TRADE_SIZE=100
 DAILY_SPENDING_LIMIT=500
 
@@ -99,21 +99,21 @@ Press `Ctrl+C` to gracefully shutdown. The bot will:
 
 ### Conservative (Recommended for Start)
 ```env
-TARGET_BALANCE=200000       # Target's balance
+TARGET_BALANCE=0            # Auto-fetch target's balance
 MAX_TRADE_SIZE=10           # $10 max per trade
 DAILY_SPENDING_LIMIT=50     # $50 per day
 ```
 
 ### Moderate
 ```env
-TARGET_BALANCE=200000       # Target's balance
+TARGET_BALANCE=0            # Auto-fetch target's balance
 MAX_TRADE_SIZE=100          # $100 max per trade
 DAILY_SPENDING_LIMIT=500    # $500 per day
 ```
 
 ### Aggressive (Use with caution!)
 ```env
-TARGET_BALANCE=200000       # Target's balance
+TARGET_BALANCE=0            # Auto-fetch target's balance
 MAX_TRADE_SIZE=500          # $500 max per trade
 DAILY_SPENDING_LIMIT=2000   # $2000 per day
 ```

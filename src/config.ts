@@ -45,7 +45,7 @@ export function loadConfig(): AppConfig {
     polymarketApiUrl: getEnvVar('POLYMARKET_API_URL', false) || 'https://clob.polymarket.com',
 
     // Trading configuration
-    targetBalance: getEnvNumber('TARGET_BALANCE'),
+    targetBalance: getEnvNumber('TARGET_BALANCE', 0),
     maxTradeSize: getEnvNumber('MAX_TRADE_SIZE'),
     dailySpendingLimit: getEnvNumber('DAILY_SPENDING_LIMIT'),
     minLiquidityRatio: getEnvNumber('MIN_LIQUIDITY_RATIO'),
@@ -75,9 +75,9 @@ function validateConfig(config: AppConfig): void {
     throw new Error('Invalid TARGET_WALLET format. Must be a valid Ethereum address (0x + 40 hex chars).');
   }
 
-  // Validate target balance
-  if (config.targetBalance <= 0) {
-    throw new Error('TARGET_BALANCE must be greater than 0 (the target wallet total balance in USD).');
+  // Validate target balance (0 = auto-fetch, any positive value = manual override)
+  if (config.targetBalance < 0) {
+    throw new Error('TARGET_BALANCE must be 0 (auto-fetch) or a positive number.');
   }
 
   // Validate max trade size
@@ -113,7 +113,7 @@ export function printConfig(config: AppConfig): void {
   console.log(`    Private Key: ${config.privateKey.substring(0, 10)}...${config.privateKey.substring(60)}`);
   console.log(`    Target Wallet: ${config.targetWallet}`);
   console.log('  Trading:');
-  console.log(`    Target Balance: $${config.targetBalance.toLocaleString()}`);
+  console.log(`    Target Balance: ${config.targetBalance > 0 ? '$' + config.targetBalance.toLocaleString() : 'Auto-fetch'}`);
   console.log(`    Max Trade Size: $${config.maxTradeSize}`);
   console.log(`    Daily Spending Limit: $${config.dailySpendingLimit}`);
   console.log(`    Min Liquidity Ratio: ${(config.minLiquidityRatio * 100).toFixed(1)}%`);
