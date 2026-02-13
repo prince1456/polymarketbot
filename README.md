@@ -5,7 +5,7 @@ Automated copy trading bot for Polymarket prediction markets. Monitors a target 
 ## Features
 
 - ✅ **Real-time Monitoring**: Continuously monitors target wallet for new positions
-- ✅ **Proportional Sizing**: Calculates trade sizes based on your balance percentage
+- ✅ **Ratio-Based Sizing**: Matches target trader's portfolio ratio (e.g., target trades 1% of 200k = $2000, you trade 1% of $200 = $2)
 - ✅ **Risk Management**: Built-in safety limits for trade size, daily spending, and liquidity
 - ✅ **Dry Run Mode**: Test the bot without executing real trades
 - ✅ **Trade Tracking**: SQLite database tracks all copied trades
@@ -49,10 +49,22 @@ nano .env
 
 ### Trading Parameters
 
-- `PERCENTAGE_ALLOCATION`: Percentage of your balance to use per trade (e.g., 0.05 = 5%)
+- `TARGET_BALANCE`: Target trader's estimated total balance in USD (used for ratio calculation)
 - `MAX_TRADE_SIZE`: Maximum USD per single trade (safety limit)
 - `DAILY_SPENDING_LIMIT`: Maximum USD to spend per day
 - `MIN_LIQUIDITY_RATIO`: Minimum market liquidity required (0.1 = 10%)
+
+### Ratio-Based Sizing
+
+The bot calculates trade sizes by matching the target's portfolio ratio:
+
+```
+ratio = target_trade_value / TARGET_BALANCE
+your_trade = your_balance * ratio
+```
+
+Example: Target has $200,000 and trades $2,000 (1% of portfolio).
+You have $200 USDC, so the bot trades $2 (same 1% ratio).
 
 ### Example Configuration
 
@@ -61,7 +73,7 @@ PRIVATE_KEY=0xYourPrivateKeyHere
 TARGET_WALLET=0xTargetWalletAddressHere
 POLYMARKET_API_KEY=your_api_key_here
 
-PERCENTAGE_ALLOCATION=0.05
+TARGET_BALANCE=200000
 MAX_TRADE_SIZE=100
 DAILY_SPENDING_LIMIT=500
 MIN_LIQUIDITY_RATIO=0.1
@@ -125,7 +137,7 @@ npm run dev
 ## How It Works
 
 1. **Monitoring**: Bot polls the target wallet every minute (configurable) for new positions
-2. **Detection**: When a new position is detected, it calculates the proportional size
+2. **Detection**: When a new position is detected, it calculates the ratio-based proportional size
 3. **Validation**: Risk manager checks:
    - Trade size doesn't exceed MAX_TRADE_SIZE
    - Daily spending limit not exceeded

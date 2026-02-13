@@ -65,7 +65,7 @@ export class DatabaseManager {
   public getTodaySpending(): number {
     const today = new Date().toISOString().split('T')[0];
     const stmt = this.db.prepare(`
-      SELECT total_spent FROM daily_spending WHERE date = ?
+      SELECT total_spent as totalSpent FROM daily_spending WHERE date = ?
     `);
 
     const row = stmt.get(today) as DailySpending | undefined;

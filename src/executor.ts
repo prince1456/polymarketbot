@@ -36,8 +36,17 @@ export class TradeExecutor {
       console.log(`Outcome: ${targetPosition.outcome}`);
       console.log(`Target Size: ${targetPosition.size} @ $${targetPosition.price.toFixed(2)}`);
 
-      // Step 1: Calculate our position size
+      // Step 1: Calculate our position size using ratio-based proportional sizing
       const ourSize = await this.calculateProportionalSize(targetPosition);
+
+      if (ourSize < 0.01) {
+        console.log(`Calculated trade size $${ourSize.toFixed(4)} is too small, skipping`);
+        return {
+          success: false,
+          error: 'Calculated trade size too small (< $0.01)',
+        };
+      }
+
       console.log(`Our Size: $${ourSize.toFixed(2)}`);
 
       // Step 2: Fetch orderbook for liquidity check
@@ -99,27 +108,38 @@ export class TradeExecutor {
     }
   }
 
+  /**
+   * Ratio-based proportional sizing:
+   *   ratio = target_trade_value / target_total_balance
+   *   our_trade_size = our_balance * ratio
+   *
+   * Example: target has 200k, trades $2000 (1% of portfolio)
+   *          we have $200, so we trade $2 (1% of our portfolio)
+   */
   private async calculateProportionalSize(targetPosition: Position): Promise<number> {
     try {
-      // Get our current balance
       const ourBalance = await this.risk.getBalance();
+      const targetTradeValue = targetPosition.value;
+      const targetTotalBalance = this.config.targetBalance;
 
-      // For proportional sizing, we use:
-      // our_trade_size = our_balance * target_position_percentage * allocation_percentage
+      // Calculate what ratio of the target's portfolio this trade represents
+      const ratio = targetTradeValue / targetTotalBalance;
 
-      // Calculate what percentage of target's balance this trade represents
-      // We approximate by assuming target has similar capital (this is a simplification)
-      // A more accurate implementation would fetch target's total balance
-      const targetPositionValue = targetPosition.value;
+      // Apply the same ratio to our balance
+      let ourTradeSize = ourBalance.available * ratio;
 
-      // Calculate our proportional trade size
-      // Using the configured percentage allocation
-      const ourTradeSize = ourBalance.available * this.config.percentageAllocation;
+      console.log(`  Ratio calculation:`);
+      console.log(`    Target trade: $${targetTradeValue.toFixed(2)} / $${targetTotalBalance.toLocaleString()} = ${(ratio * 100).toFixed(4)}%`);
+      console.log(`    Our balance: $${ourBalance.available.toFixed(2)}`);
+      console.log(`    Our trade: $${ourTradeSize.toFixed(2)}`);
 
-      // Cap it at the target's position value (don't trade more than they did)
-      const finalSize = Math.min(ourTradeSize, targetPositionValue);
+      // Cap at max trade size
+      if (ourTradeSize > this.config.maxTradeSize) {
+        console.log(`    Capped from $${ourTradeSize.toFixed(2)} to max trade size $${this.config.maxTradeSize}`);
+        ourTradeSize = this.config.maxTradeSize;
+      }
 
-      return finalSize;
+      return ourTradeSize;
     } catch (error) {
       console.error('Error calculating proportional size:', error);
       throw error;
@@ -131,36 +151,38 @@ export class TradeExecutor {
     size: number
   ): Promise<TradeExecutionResult> {
     try {
-      // Calculate price with slippage
-      const priceWithSlippage = position.price * (1 + this.config.slippageTolerance);
-      const tokenAmount = size / position.price;
+      // Calculate price with slippage tolerance (max price willing to pay)
+      const maxPrice = Math.min(position.price * (1 + this.config.slippageTolerance), 0.99);
+      // Calculate token amount using max price to ensure we don't exceed our USD budget
+      const tokenAmount = size / maxPrice;
 
       console.log('Placing order:');
       console.log(`  Token ID: ${position.outcomeId}`);
-      console.log(`  Price: ${priceWithSlippage.toFixed(4)}`);
-      console.log(`  Size: ${tokenAmount.toFixed(2)} tokens`);
+      console.log(`  Max Price: ${maxPrice.toFixed(4)}`);
+      console.log(`  Size: ${tokenAmount.toFixed(2)} tokens ($${size.toFixed(2)} USDC)`);
       console.log(`  Side: BUY`);
 
-      // Note: The actual order placement would use the CLOB client's createOrder
-      // and postOrder methods, but these require proper authentication and signing
-      // with the wallet. For now, we'll return a placeholder that indicates
-      // the order parameters are ready.
+      // Create and post order using CLOB client
+      const order = await this.client.createAndPostOrder({
+        tokenID: position.outcomeId,
+        price: parseFloat(maxPrice.toFixed(4)),
+        side: 'BUY' as any,
+        size: parseFloat(tokenAmount.toFixed(2)),
+        feeRateBps: 0,
+      });
 
-      // In production, you would:
-      // 1. Create the order with proper signing using wallet private key
-      // 2. Post the order to the CLOB
-      // 3. Wait for order confirmation
+      const orderId = (order as any)?.orderID || (order as any)?.id || `ORDER-${Date.now()}`;
+      const txHash = (order as any)?.transactionsHashes?.[0] ||
+                     (order as any)?.transactionHash ||
+                     (order as any)?.txHash || '';
 
-      const simulatedOrderId = `ORDER-${Date.now()}`;
-      const simulatedTxHash = `0x${Math.random().toString(16).substr(2, 64)}`;
-
-      console.log(`Order would be placed with ID: ${simulatedOrderId}`);
+      console.log(`Order placed: ${orderId}`);
 
       return {
         success: true,
-        orderId: simulatedOrderId,
+        orderId,
         filledAmount: size,
-        txHash: simulatedTxHash,
+        txHash,
       };
     } catch (error) {
       console.error('Error placing order:', error);
@@ -176,7 +198,6 @@ export class TradeExecutor {
     size: number
   ): TradeExecutionResult {
     const simulatedOrderId = `SIM-${Date.now()}`;
-    const simulatedTxHash = `0x${Math.random().toString(16).substr(2, 64)}`;
 
     // Log simulated trade
     const trade: Trade = {
@@ -186,19 +207,18 @@ export class TradeExecutor {
       ourAmount: size,
       price: position.price,
       timestamp: new Date(),
-      txHash: simulatedTxHash,
+      txHash: `sim_${simulatedOrderId}`,
     };
 
     this.db.logTrade(trade);
 
     console.log(`Simulated Order ID: ${simulatedOrderId}`);
-    console.log(`Simulated TX Hash: ${simulatedTxHash}`);
+    console.log(`Simulated trade: $${size.toFixed(2)} at $${position.price.toFixed(4)}`);
 
     return {
       success: true,
       orderId: simulatedOrderId,
       filledAmount: size,
-      txHash: simulatedTxHash,
     };
   }
 

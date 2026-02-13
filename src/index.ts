@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { fileURLToPath } from 'url';
 import { loadConfig, printConfig } from './config.js';
 import { DatabaseManager } from './database.js';
 import { PositionMonitor } from './monitor.js';
@@ -155,18 +156,17 @@ class PolymarketCopyTradingBot {
       console.log('✓ Position monitor stopped');
     }
 
-    // Close database
+    // Print final stats before closing database
     if (this.db) {
+      console.log('\nFinal Statistics:');
+      const tradeCount = this.db.getTradeCount();
+      const totalSpent = this.db.getTotalSpent(30);
+      console.log(`  Total Trades: ${tradeCount}`);
+      console.log(`  Total Spent (30 days): $${totalSpent.toFixed(2)}`);
+
       this.db.close();
       console.log('✓ Database closed');
     }
-
-    // Print final stats
-    console.log('\nFinal Statistics:');
-    const tradeCount = this.db.getTradeCount();
-    const totalSpent = this.db.getTotalSpent(30);
-    console.log(`  Total Trades: ${tradeCount}`);
-    console.log(`  Total Spent (30 days): $${totalSpent.toFixed(2)}`);
 
     console.log('\n👋 Goodbye!\n');
   }
@@ -205,7 +205,11 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+// ESM-compatible main module check
+const isMainModule = process.argv[1] &&
+  fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isMainModule) {
   main();
 }
 

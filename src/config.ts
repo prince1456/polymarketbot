@@ -45,7 +45,7 @@ export function loadConfig(): AppConfig {
     polymarketApiUrl: getEnvVar('POLYMARKET_API_URL', false) || 'https://clob.polymarket.com',
 
     // Trading configuration
-    percentageAllocation: getEnvNumber('PERCENTAGE_ALLOCATION'),
+    targetBalance: getEnvNumber('TARGET_BALANCE'),
     maxTradeSize: getEnvNumber('MAX_TRADE_SIZE'),
     dailySpendingLimit: getEnvNumber('DAILY_SPENDING_LIMIT'),
     minLiquidityRatio: getEnvNumber('MIN_LIQUIDITY_RATIO'),
@@ -75,9 +75,9 @@ function validateConfig(config: AppConfig): void {
     throw new Error('Invalid TARGET_WALLET format. Must be a valid Ethereum address (0x + 40 hex chars).');
   }
 
-  // Validate percentage allocation (0-1)
-  if (config.percentageAllocation <= 0 || config.percentageAllocation > 1) {
-    throw new Error('PERCENTAGE_ALLOCATION must be between 0 and 1 (e.g., 0.05 for 5%).');
+  // Validate target balance
+  if (config.targetBalance <= 0) {
+    throw new Error('TARGET_BALANCE must be greater than 0 (the target wallet total balance in USD).');
   }
 
   // Validate max trade size
@@ -113,7 +113,7 @@ export function printConfig(config: AppConfig): void {
   console.log(`    Private Key: ${config.privateKey.substring(0, 10)}...${config.privateKey.substring(60)}`);
   console.log(`    Target Wallet: ${config.targetWallet}`);
   console.log('  Trading:');
-  console.log(`    Percentage Allocation: ${(config.percentageAllocation * 100).toFixed(1)}%`);
+  console.log(`    Target Balance: $${config.targetBalance.toLocaleString()}`);
   console.log(`    Max Trade Size: $${config.maxTradeSize}`);
   console.log(`    Daily Spending Limit: $${config.dailySpendingLimit}`);
   console.log(`    Min Liquidity Ratio: ${(config.minLiquidityRatio * 100).toFixed(1)}%`);
