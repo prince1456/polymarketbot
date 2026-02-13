@@ -4,7 +4,6 @@ export interface AppConfig {
   targetWallet: string;
 
   // Polymarket API
-  polymarketApiKey: string;
   polymarketApiUrl?: string;
 
   // Trading configuration
@@ -21,7 +20,6 @@ export interface AppConfig {
   dryRun: boolean;
   pollInterval: number;
   databasePath: string;
-  logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
 
 export interface Position {

@@ -60,7 +60,6 @@ class BotServer {
         this.config = {
           privateKey: config.privateKey,
           targetWallet: config.targetWallet,
-          polymarketApiKey: '',
           targetBalance: config.targetBalance || 0,
           maxTradeSize: config.maxTradeSize || 100,
           dailySpendingLimit: config.dailySpendingLimit || 500,
@@ -70,7 +69,6 @@ class BotServer {
           dryRun: config.dryRun !== false,
           pollInterval: 60,
           databasePath: './polymarket.db',
-          logLevel: 'info',
         };
 
         await this.startBot();

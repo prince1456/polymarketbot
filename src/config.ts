@@ -41,7 +41,6 @@ export function loadConfig(): AppConfig {
     targetWallet: getEnvVar('TARGET_WALLET'),
 
     // Polymarket API
-    polymarketApiKey: getEnvVar('POLYMARKET_API_KEY'),
     polymarketApiUrl: getEnvVar('POLYMARKET_API_URL', false) || 'https://clob.polymarket.com',
 
     // Trading configuration
@@ -58,7 +57,6 @@ export function loadConfig(): AppConfig {
     dryRun: getEnvBoolean('DRY_RUN', true),
     pollInterval: getEnvNumber('POLL_INTERVAL', 60),
     databasePath: getEnvVar('DATABASE_PATH', false) || './polymarket.db',
-    logLevel: (getEnvVar('LOG_LEVEL', false) || 'info') as AppConfig['logLevel'],
   };
 
   // Validate configuration
@@ -103,11 +101,6 @@ function validateConfig(config: AppConfig): void {
     throw new Error('SLIPPAGE_TOLERANCE must be between 0 and 1.');
   }
 
-  // Validate log level
-  const validLogLevels = ['debug', 'info', 'warn', 'error'];
-  if (!validLogLevels.includes(config.logLevel)) {
-    throw new Error(`LOG_LEVEL must be one of: ${validLogLevels.join(', ')}`);
-  }
 }
 
 export function printConfig(config: AppConfig): void {
@@ -127,6 +120,5 @@ export function printConfig(config: AppConfig): void {
   console.log(`    Dry Run: ${config.dryRun ? 'ENABLED' : 'DISABLED'}`);
   console.log(`    Poll Interval: ${config.pollInterval}s`);
   console.log(`    Database: ${config.databasePath}`);
-  console.log(`    Log Level: ${config.logLevel}`);
   console.log('');
 }
