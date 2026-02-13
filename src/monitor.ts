@@ -10,6 +10,7 @@ export class PositionMonitor extends EventEmitter {
   private previousPositions: Map<string, Position> = new Map();
   private monitorInterval?: NodeJS.Timeout;
   private isRunning = false;
+  private initialSnapshotLoaded = false;
 
   constructor(config: AppConfig, db: DatabaseManager) {
     super();
@@ -31,10 +32,11 @@ export class PositionMonitor extends EventEmitter {
     }
 
     this.isRunning = true;
+    this.initialSnapshotLoaded = false;
     console.log(`Starting position monitor for wallet: ${this.config.targetWallet}`);
 
-    // Initial position fetch
-    await this.checkPositions();
+    // Snapshot existing positions (don't trigger trades for these)
+    await this.loadInitialSnapshot();
 
     // Start monitoring loop
     this.monitorInterval = setInterval(async () => {
@@ -60,6 +62,26 @@ export class PositionMonitor extends EventEmitter {
 
     this.isRunning = false;
     console.log('Position monitor stopped');
+  }
+
+  private async loadInitialSnapshot(): Promise<void> {
+    try {
+      const positions = await this.fetchTargetPositions();
+
+      console.log(`Snapshotting ${positions.length} existing positions (will not copy these)`);
+
+      // Store all existing positions so we don't treat them as new
+      this.updatePositionsCache(positions);
+      this.initialSnapshotLoaded = true;
+
+      for (const pos of positions) {
+        console.log(`  [snapshot] ${pos.outcome} on ${pos.marketId} — size: ${pos.size}, value: $${pos.value.toFixed(2)}`);
+      }
+    } catch (error) {
+      console.error('Error loading initial snapshot:', error);
+      // Mark as loaded anyway so the bot can start detecting new positions
+      this.initialSnapshotLoaded = true;
+    }
   }
 
   private async checkPositions(): Promise<void> {
