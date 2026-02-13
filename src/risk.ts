@@ -6,6 +6,7 @@ export class RiskManager {
   private config: AppConfig;
   private db: DatabaseManager;
   private wallet: ethers.Wallet;
+  private cachedDecimals: number | null = null;
 
   // Polygon USDC contract address
   private readonly USDC_ADDRESS = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
@@ -133,9 +134,13 @@ export class RiskManager {
       );
 
       const balance = await usdcContract.balanceOf(this.wallet.address);
-      const decimals = await usdcContract.decimals();
 
-      const balanceInUSDC = parseFloat(ethers.formatUnits(balance, decimals));
+      // Cache decimals to avoid redundant RPC calls (USDC is always 6)
+      if (this.cachedDecimals === null) {
+        this.cachedDecimals = Number(await usdcContract.decimals());
+      }
+
+      const balanceInUSDC = parseFloat(ethers.formatUnits(balance, this.cachedDecimals));
 
       return {
         total: balanceInUSDC,
@@ -152,6 +157,35 @@ export class RiskManager {
     return this.getUserBalance();
   }
 
+  /**
+   * Fetch USDC balance for any wallet address on Polygon.
+   */
+  public async getUsdcBalanceOf(address: string): Promise<number> {
+    try {
+      const provider = this.wallet.provider;
+      if (!provider) {
+        throw new Error('Wallet provider not available');
+      }
+
+      const usdcContract = new ethers.Contract(
+        this.USDC_ADDRESS,
+        this.USDC_ABI,
+        provider
+      );
+
+      const balance = await usdcContract.balanceOf(address);
+
+      if (this.cachedDecimals === null) {
+        this.cachedDecimals = Number(await usdcContract.decimals());
+      }
+
+      return parseFloat(ethers.formatUnits(balance, this.cachedDecimals));
+    } catch (error) {
+      console.error(`Error fetching USDC balance for ${address}:`, error);
+      return 0;
+    }
+  }
+
   public async printRiskStatus(): Promise<void> {
     try {
       const balance = await this.getUserBalance();
@@ -160,6 +194,13 @@ export class RiskManager {
 
       console.log('\n=== Risk Status ===');
       console.log(`USDC Balance: $${balance.available.toFixed(2)}`);
+      if (this.config.targetBalance > 0) {
+        const ratio = balance.available / this.config.targetBalance;
+        console.log(`Target Balance: $${this.config.targetBalance.toLocaleString()} (manual)`);
+        console.log(`Copy Ratio: 1:${(this.config.targetBalance / balance.available).toFixed(0)} (${(ratio * 100).toFixed(4)}%)`);
+      } else {
+        console.log(`Target Balance: Auto-fetch (live from chain + positions)`);
+      }
       console.log(`Today's Spending: $${todaySpending.toFixed(2)} / $${this.config.dailySpendingLimit}`);
       console.log(`Remaining Today: $${(this.config.dailySpendingLimit - todaySpending).toFixed(2)}`);
       console.log(`Total Trades: ${tradeCount}`);

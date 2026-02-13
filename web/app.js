@@ -18,7 +18,7 @@ function loadConfiguration() {
     const config = {
         targetWallet: localStorage.getItem('targetWallet') || '',
         privateKey: localStorage.getItem('privateKey') || '',
-        percentageAllocation: localStorage.getItem('percentageAllocation') || '5',
+        targetBalance: localStorage.getItem('targetBalance') || '0',
         maxTradeSize: localStorage.getItem('maxTradeSize') || '100',
         dailySpendingLimit: localStorage.getItem('dailySpendingLimit') || '500',
         minLiquidityRatio: localStorage.getItem('minLiquidityRatio') || '10',
@@ -28,7 +28,7 @@ function loadConfiguration() {
 
     document.getElementById('target-wallet').value = config.targetWallet;
     document.getElementById('private-key').value = config.privateKey;
-    document.getElementById('percentage-allocation').value = config.percentageAllocation;
+    document.getElementById('target-balance').value = config.targetBalance;
     document.getElementById('max-trade-size').value = config.maxTradeSize;
     document.getElementById('daily-spending-limit').value = config.dailySpendingLimit;
     document.getElementById('min-liquidity-ratio').value = config.minLiquidityRatio;
@@ -45,7 +45,7 @@ function saveConfiguration() {
     const config = {
         targetWallet: document.getElementById('target-wallet').value,
         privateKey: document.getElementById('private-key').value,
-        percentageAllocation: document.getElementById('percentage-allocation').value,
+        targetBalance: document.getElementById('target-balance').value,
         maxTradeSize: document.getElementById('max-trade-size').value,
         dailySpendingLimit: document.getElementById('daily-spending-limit').value,
         minLiquidityRatio: document.getElementById('min-liquidity-ratio').value,
@@ -182,7 +182,7 @@ async function startBot() {
         const config = {
             targetWallet: localStorage.getItem('targetWallet'),
             privateKey: localStorage.getItem('privateKey'),
-            percentageAllocation: parseFloat(localStorage.getItem('percentageAllocation')) / 100,
+            targetBalance: parseFloat(localStorage.getItem('targetBalance')) || 0,
             maxTradeSize: parseFloat(localStorage.getItem('maxTradeSize')),
             dailySpendingLimit: parseFloat(localStorage.getItem('dailySpendingLimit')),
             minLiquidityRatio: parseFloat(localStorage.getItem('minLiquidityRatio')) / 100,

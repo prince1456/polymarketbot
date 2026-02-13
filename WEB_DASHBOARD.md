@@ -40,7 +40,7 @@ http://localhost:3000
 1. **Fill in Configuration:**
    - Target Wallet: The wallet address you want to copy (e.g., `0x...`)
    - Private Key: Your wallet private key (stored only in browser)
-   - Percentage Allocation: % of your balance to use per trade (e.g., 5%)
+   - Target Balance: Target trader's total balance in USD (leave 0 to auto-fetch from chain)
    - Max Trade Size: Maximum $ per single trade (e.g., 100)
    - Daily Spending Limit: Maximum $ per day (e.g., 500)
    - Min Liquidity Ratio: Minimum market liquidity % (e.g., 10%)

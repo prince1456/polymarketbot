@@ -11,6 +11,11 @@ export class TradeExecutor {
   private risk: RiskManager;
   private wallet: ethers.Wallet;
 
+  // Cached target portfolio value (refreshed periodically)
+  private cachedTargetBalance: number = 0;
+  private targetBalanceFetchedAt: number = 0;
+  private readonly TARGET_BALANCE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   constructor(
     config: AppConfig,
     db: DatabaseManager,
@@ -36,8 +41,17 @@ export class TradeExecutor {
       console.log(`Outcome: ${targetPosition.outcome}`);
       console.log(`Target Size: ${targetPosition.size} @ $${targetPosition.price.toFixed(2)}`);
 
-      // Step 1: Calculate our position size
+      // Step 1: Calculate our position size using ratio-based proportional sizing
       const ourSize = await this.calculateProportionalSize(targetPosition);
+
+      if (ourSize < 0.01) {
+        console.log(`Calculated trade size $${ourSize.toFixed(4)} is too small, skipping`);
+        return {
+          success: false,
+          error: 'Calculated trade size too small (< $0.01)',
+        };
+      }
+
       console.log(`Our Size: $${ourSize.toFixed(2)}`);
 
       // Step 2: Fetch orderbook for liquidity check
@@ -99,30 +113,126 @@ export class TradeExecutor {
     }
   }
 
+  /**
+   * Ratio-based proportional sizing:
+   *   ratio = target_trade_value / target_total_balance
+   *   our_trade_size = our_balance * ratio
+   *
+   * Example: target has 200k, trades $2000 (1% of portfolio)
+   *          we have $200, so we trade $2 (1% of our portfolio)
+   *
+   * If TARGET_BALANCE=0 (default), auto-fetches the target's total
+   * portfolio value (on-chain USDC + Polymarket position values).
+   */
   private async calculateProportionalSize(targetPosition: Position): Promise<number> {
     try {
-      // Get our current balance
       const ourBalance = await this.risk.getBalance();
+      const targetTradeValue = targetPosition.value;
 
-      // For proportional sizing, we use:
-      // our_trade_size = our_balance * target_position_percentage * allocation_percentage
+      // Get target's total balance (manual override or auto-fetch)
+      const targetTotalBalance = await this.getTargetBalance();
 
-      // Calculate what percentage of target's balance this trade represents
-      // We approximate by assuming target has similar capital (this is a simplification)
-      // A more accurate implementation would fetch target's total balance
-      const targetPositionValue = targetPosition.value;
+      if (targetTotalBalance <= 0) {
+        console.log('  WARNING: Could not determine target balance, skipping trade');
+        return 0;
+      }
 
-      // Calculate our proportional trade size
-      // Using the configured percentage allocation
-      const ourTradeSize = ourBalance.available * this.config.percentageAllocation;
+      // Calculate what ratio of the target's portfolio this trade represents
+      const ratio = targetTradeValue / targetTotalBalance;
 
-      // Cap it at the target's position value (don't trade more than they did)
-      const finalSize = Math.min(ourTradeSize, targetPositionValue);
+      // Apply the same ratio to our balance
+      let ourTradeSize = ourBalance.available * ratio;
 
-      return finalSize;
+      const source = this.config.targetBalance > 0 ? 'manual' : 'auto-fetched';
+      console.log(`  Ratio calculation:`);
+      console.log(`    Target balance: $${targetTotalBalance.toLocaleString()} (${source})`);
+      console.log(`    Target trade: $${targetTradeValue.toFixed(2)} / $${targetTotalBalance.toLocaleString()} = ${(ratio * 100).toFixed(4)}%`);
+      console.log(`    Our balance: $${ourBalance.available.toFixed(2)}`);
+      console.log(`    Our trade: $${ourTradeSize.toFixed(2)}`);
+
+      // Cap at max trade size
+      if (ourTradeSize > this.config.maxTradeSize) {
+        console.log(`    Capped from $${ourTradeSize.toFixed(2)} to max trade size $${this.config.maxTradeSize}`);
+        ourTradeSize = this.config.maxTradeSize;
+      }
+
+      return ourTradeSize;
     } catch (error) {
       console.error('Error calculating proportional size:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Returns the target's total balance. Uses manual config value if set,
+   * otherwise auto-fetches from chain (USDC) + Polymarket positions.
+   * Result is cached for 5 minutes to avoid spamming APIs.
+   */
+  private async getTargetBalance(): Promise<number> {
+    // If manually configured, use that
+    if (this.config.targetBalance > 0) {
+      return this.config.targetBalance;
+    }
+
+    // Check cache
+    const now = Date.now();
+    if (this.cachedTargetBalance > 0 && (now - this.targetBalanceFetchedAt) < this.TARGET_BALANCE_CACHE_TTL) {
+      return this.cachedTargetBalance;
+    }
+
+    // Auto-fetch: on-chain USDC + sum of position values
+    console.log('  Fetching target portfolio value...');
+
+    const [usdcBalance, positionsValue] = await Promise.all([
+      this.risk.getUsdcBalanceOf(this.config.targetWallet),
+      this.fetchTargetPositionsValue(),
+    ]);
+
+    const total = usdcBalance + positionsValue;
+
+    console.log(`    Target USDC on-chain: $${usdcBalance.toLocaleString()}`);
+    console.log(`    Target positions value: $${positionsValue.toLocaleString()}`);
+    console.log(`    Target total portfolio: $${total.toLocaleString()}`);
+
+    // Cache result
+    this.cachedTargetBalance = total;
+    this.targetBalanceFetchedAt = now;
+
+    return total;
+  }
+
+  /**
+   * Fetches all of the target's Polymarket positions and sums their values.
+   */
+  private async fetchTargetPositionsValue(): Promise<number> {
+    try {
+      const dataApiUrl = 'https://data-api.polymarket.com';
+      const response = await fetch(`${dataApiUrl}/positions?user=${this.config.targetWallet}`);
+
+      if (!response.ok) {
+        console.log('    Failed to fetch target positions from Data API');
+        return 0;
+      }
+
+      const data = await response.json();
+
+      if (!data || !Array.isArray(data)) {
+        return 0;
+      }
+
+      let totalValue = 0;
+      for (const pos of data) {
+        const size = parseFloat(pos.size || pos.shares || '0');
+        if (size > 0) {
+          const value = parseFloat(pos.currentValue || pos.value || '0');
+          totalValue += value;
+        }
+      }
+
+      return totalValue;
+    } catch (error) {
+      console.error('Error fetching target positions value:', error);
+      return 0;
     }
   }
 
@@ -131,36 +241,38 @@ export class TradeExecutor {
     size: number
   ): Promise<TradeExecutionResult> {
     try {
-      // Calculate price with slippage
-      const priceWithSlippage = position.price * (1 + this.config.slippageTolerance);
-      const tokenAmount = size / position.price;
+      // Calculate price with slippage tolerance (max price willing to pay)
+      const maxPrice = Math.min(position.price * (1 + this.config.slippageTolerance), 0.99);
+      // Calculate token amount using max price to ensure we don't exceed our USD budget
+      const tokenAmount = size / maxPrice;
 
       console.log('Placing order:');
       console.log(`  Token ID: ${position.outcomeId}`);
-      console.log(`  Price: ${priceWithSlippage.toFixed(4)}`);
-      console.log(`  Size: ${tokenAmount.toFixed(2)} tokens`);
+      console.log(`  Max Price: ${maxPrice.toFixed(4)}`);
+      console.log(`  Size: ${tokenAmount.toFixed(2)} tokens ($${size.toFixed(2)} USDC)`);
       console.log(`  Side: BUY`);
 
-      // Note: The actual order placement would use the CLOB client's createOrder
-      // and postOrder methods, but these require proper authentication and signing
-      // with the wallet. For now, we'll return a placeholder that indicates
-      // the order parameters are ready.
+      // Create and post order using CLOB client
+      const order = await this.client.createAndPostOrder({
+        tokenID: position.outcomeId,
+        price: parseFloat(maxPrice.toFixed(4)),
+        side: 'BUY' as any,
+        size: parseFloat(tokenAmount.toFixed(2)),
+        feeRateBps: 0,
+      });
 
-      // In production, you would:
-      // 1. Create the order with proper signing using wallet private key
-      // 2. Post the order to the CLOB
-      // 3. Wait for order confirmation
+      const orderId = (order as any)?.orderID || (order as any)?.id || `ORDER-${Date.now()}`;
+      const txHash = (order as any)?.transactionsHashes?.[0] ||
+                     (order as any)?.transactionHash ||
+                     (order as any)?.txHash || '';
 
-      const simulatedOrderId = `ORDER-${Date.now()}`;
-      const simulatedTxHash = `0x${Math.random().toString(16).substr(2, 64)}`;
-
-      console.log(`Order would be placed with ID: ${simulatedOrderId}`);
+      console.log(`Order placed: ${orderId}`);
 
       return {
         success: true,
-        orderId: simulatedOrderId,
+        orderId,
         filledAmount: size,
-        txHash: simulatedTxHash,
+        txHash,
       };
     } catch (error) {
       console.error('Error placing order:', error);
@@ -176,7 +288,6 @@ export class TradeExecutor {
     size: number
   ): TradeExecutionResult {
     const simulatedOrderId = `SIM-${Date.now()}`;
-    const simulatedTxHash = `0x${Math.random().toString(16).substr(2, 64)}`;
 
     // Log simulated trade
     const trade: Trade = {
@@ -186,19 +297,18 @@ export class TradeExecutor {
       ourAmount: size,
       price: position.price,
       timestamp: new Date(),
-      txHash: simulatedTxHash,
+      txHash: `sim_${simulatedOrderId}`,
     };
 
     this.db.logTrade(trade);
 
     console.log(`Simulated Order ID: ${simulatedOrderId}`);
-    console.log(`Simulated TX Hash: ${simulatedTxHash}`);
+    console.log(`Simulated trade: $${size.toFixed(2)} at $${position.price.toFixed(4)}`);
 
     return {
       success: true,
       orderId: simulatedOrderId,
       filledAmount: size,
-      txHash: simulatedTxHash,
     };
   }
 

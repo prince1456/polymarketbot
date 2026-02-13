@@ -8,7 +8,7 @@ export interface AppConfig {
   polymarketApiUrl?: string;
 
   // Trading configuration
-  percentageAllocation: number;
+  targetBalance: number; // 0 = auto-fetch from chain + positions
   maxTradeSize: number;
   dailySpendingLimit: number;
   minLiquidityRatio: number;

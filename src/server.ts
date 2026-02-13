@@ -61,7 +61,7 @@ class BotServer {
           privateKey: config.privateKey,
           targetWallet: config.targetWallet,
           polymarketApiKey: '',
-          percentageAllocation: config.percentageAllocation || 0.05,
+          targetBalance: config.targetBalance || 0,
           maxTradeSize: config.maxTradeSize || 100,
           dailySpendingLimit: config.dailySpendingLimit || 500,
           minLiquidityRatio: config.minLiquidityRatio || 0.1,
