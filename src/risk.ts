@@ -17,10 +17,39 @@ export class RiskManager {
     'function decimals() view returns (uint8)',
   ];
 
+  private static readonly MAX_RETRIES = 4;
+  private static readonly BASE_DELAY_MS = 2000;
+
   constructor(config: AppConfig, db: DatabaseManager, wallet: ethers.Wallet) {
     this.config = config;
     this.db = db;
     this.wallet = wallet;
+  }
+
+  /**
+   * Retry an async operation with exponential backoff (2s, 4s, 8s, 16s).
+   */
+  private async withRetry<T>(operation: () => Promise<T>, label: string): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= RiskManager.MAX_RETRIES; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        const isRateLimit = error?.info?.error?.message?.includes('rate limit')
+          || error?.info?.error?.code === -32090
+          || error?.code === 'CALL_EXCEPTION';
+
+        if (!isRateLimit || attempt === RiskManager.MAX_RETRIES) {
+          throw error;
+        }
+
+        const delay = RiskManager.BASE_DELAY_MS * Math.pow(2, attempt);
+        console.log(`  [${label}] Rate limited, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${RiskManager.MAX_RETRIES})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    throw lastError;
   }
 
   public async validateTrade(
@@ -121,7 +150,7 @@ export class RiskManager {
   }
 
   private async getUserBalance(): Promise<UserBalance> {
-    try {
+    return this.withRetry(async () => {
       const provider = this.wallet.provider;
       if (!provider) {
         throw new Error('Wallet provider not available');
@@ -147,10 +176,7 @@ export class RiskManager {
         available: balanceInUSDC,
         locked: 0,
       };
-    } catch (error) {
-      console.error('Error fetching USDC balance:', error);
-      throw error;
-    }
+    }, 'getUserBalance');
   }
 
   public async getBalance(): Promise<UserBalance> {
@@ -162,24 +188,26 @@ export class RiskManager {
    */
   public async getUsdcBalanceOf(address: string): Promise<number> {
     try {
-      const provider = this.wallet.provider;
-      if (!provider) {
-        throw new Error('Wallet provider not available');
-      }
+      return await this.withRetry(async () => {
+        const provider = this.wallet.provider;
+        if (!provider) {
+          throw new Error('Wallet provider not available');
+        }
 
-      const usdcContract = new ethers.Contract(
-        this.USDC_ADDRESS,
-        this.USDC_ABI,
-        provider
-      );
+        const usdcContract = new ethers.Contract(
+          this.USDC_ADDRESS,
+          this.USDC_ABI,
+          provider
+        );
 
-      const balance = await usdcContract.balanceOf(address);
+        const balance = await usdcContract.balanceOf(address);
 
-      if (this.cachedDecimals === null) {
-        this.cachedDecimals = Number(await usdcContract.decimals());
-      }
+        if (this.cachedDecimals === null) {
+          this.cachedDecimals = Number(await usdcContract.decimals());
+        }
 
-      return parseFloat(ethers.formatUnits(balance, this.cachedDecimals));
+        return parseFloat(ethers.formatUnits(balance, this.cachedDecimals));
+      }, 'getUsdcBalanceOf');
     } catch (error) {
       console.error(`Error fetching USDC balance for ${address}:`, error);
       return 0;

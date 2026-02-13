@@ -14,6 +14,9 @@ export interface AppConfig {
   minLiquidityRatio: number;
   slippageTolerance: number;
 
+  // Network
+  rpcUrl: string;
+
   // Operational settings
   dryRun: boolean;
   pollInterval: number;

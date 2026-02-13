@@ -28,7 +28,7 @@ class PolymarketCopyTradingBot {
 
     // Initialize wallet
     console.log('Initializing wallet...');
-    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+    const provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
     this.wallet = new ethers.Wallet(this.config.privateKey, provider);
     console.log(`Wallet address: ${this.wallet.address}\n`);
 

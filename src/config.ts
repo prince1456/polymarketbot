@@ -51,6 +51,9 @@ export function loadConfig(): AppConfig {
     minLiquidityRatio: getEnvNumber('MIN_LIQUIDITY_RATIO'),
     slippageTolerance: getEnvNumber('SLIPPAGE_TOLERANCE', 0.02),
 
+    // Network
+    rpcUrl: getEnvVar('RPC_URL', false) || 'https://polygon-rpc.com',
+
     // Operational settings
     dryRun: getEnvBoolean('DRY_RUN', true),
     pollInterval: getEnvNumber('POLL_INTERVAL', 60),
@@ -118,6 +121,8 @@ export function printConfig(config: AppConfig): void {
   console.log(`    Daily Spending Limit: $${config.dailySpendingLimit}`);
   console.log(`    Min Liquidity Ratio: ${(config.minLiquidityRatio * 100).toFixed(1)}%`);
   console.log(`    Slippage Tolerance: ${(config.slippageTolerance * 100).toFixed(1)}%`);
+  console.log('  Network:');
+  console.log(`    RPC URL: ${config.rpcUrl}`);
   console.log('  Operational:');
   console.log(`    Dry Run: ${config.dryRun ? 'ENABLED' : 'DISABLED'}`);
   console.log(`    Poll Interval: ${config.pollInterval}s`);

@@ -66,6 +66,7 @@ class BotServer {
           dailySpendingLimit: config.dailySpendingLimit || 500,
           minLiquidityRatio: config.minLiquidityRatio || 0.1,
           slippageTolerance: 0.02,
+          rpcUrl: config.rpcUrl || 'https://polygon-rpc.com',
           dryRun: config.dryRun !== false,
           pollInterval: 60,
           databasePath: './polymarket.db',
@@ -240,7 +241,7 @@ class BotServer {
     console.log('Starting bot...');
 
     // Initialize wallet
-    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+    const provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
     this.wallet = new ethers.Wallet(this.config.privateKey, provider);
     console.log(`Wallet: ${this.wallet.address}`);
 
